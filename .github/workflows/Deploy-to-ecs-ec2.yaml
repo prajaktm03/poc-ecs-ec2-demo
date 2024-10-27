@@ -65,15 +65,15 @@ jobs:
         run: |
           # Update the Task Definition JSON to include the new Image URI and Security Group ID
           jq --arg IMAGE_URI "${{ env.LATEST_IMAGE_URI }}" --arg SG_ID "${{ env.SG_ID }}" \
-            --arg FAMILY "demo-app-task" \  # Add the family parameter here
+            --arg SUBNET_ID "${{ secrets.SUBNET_ID }}" \
             '{
-              family: $FAMILY,
+              family: "demo-app-task",
               networkMode: "awsvpc",
               requiresCompatibilities: ["FARGATE"],
               containerDefinitions: [.containerDefinitions[] | .image = $IMAGE_URI],
               networkConfiguration: {
                 awsvpcConfiguration: {
-                  subnets: ["${{ secrets.SUBNET_ID }}"],
+                  subnets: [$SUBNET_ID],
                   securityGroups: [$SG_ID],
                   assignPublicIp: "ENABLED"
                 }
