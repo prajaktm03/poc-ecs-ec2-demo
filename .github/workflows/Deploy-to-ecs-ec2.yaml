@@ -15,26 +15,6 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
-      - name: Get VPC ID
-        id: get_vpc_id
-        run: |
-          VPC_ID=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=your-vpc-name" --query "Vpcs[0].VpcId" --output text)
-          if [ "$VPC_ID" == "None" ]; then
-            echo "Error: Unable to fetch VPC ID."
-            exit 1
-          fi
-          echo "VPC_ID=$VPC_ID" >> $GITHUB_ENV
-
-      - name: Get Security Group ID
-        id: get_sg_id
-        run: |
-          SG_ID=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=${{ env.VPC_ID }}" "Name=group-name,Values=your-sg-name" --query "SecurityGroups[0].GroupId" --output text)
-          if [ "$SG_ID" == "None" ]; then
-            echo "Error: Unable to fetch Security Group ID."
-            exit 1
-          fi
-          echo "SG_ID=$SG_ID" >> $GITHUB_ENV
-
       - name: Get Latest Image URI
         id: get_image_uri
         run: |
@@ -50,6 +30,31 @@ jobs:
       - name: Debug Print fetched IMAGE_TAG
         run: echo "Fetched IMAGE_TAG is:${{ env.LATEST_IMAGE_URI }}"
 
+      - name: List all VPCs for debugging
+        run: |
+          aws ec2 describe-vpcs --query "Vpcs[*].[VpcId, Tags]" --output table
+
+      - name: Get VPC ID
+        id: get_vpc_id
+        run: |
+          VPC_ID=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=your-vpc-name" --query "Vpcs[0].VpcId" --output text)
+          echo "VPC_ID fetched: $VPC_ID"
+          if [ "$VPC_ID" == "None" ]; then
+            echo "Error: Unable to fetch VPC ID."
+            exit 1
+          fi
+          echo "VPC_ID=$VPC_ID" >> $GITHUB_ENV
+
+      - name: Get Security Group ID
+        id: get_sg_id
+        run: |
+          SG_ID=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$VPC_ID" "Name=group-name,Values=your-sg-name" --query "SecurityGroups[0].GroupId" --output text)
+          if [ "$SG_ID" == "None" ]; then
+            echo "Error: Unable to fetch Security Group ID."
+            exit 1
+          fi
+          echo "SG_ID=$SG_ID" >> $GITHUB_ENV
+
       - name: Describe Current ECS Task Definition
         id: describe_task
         run: |
@@ -59,10 +64,14 @@ jobs:
       - name: Create New Task Definition JSON
         id: create_task_def
         run: |
-          # Create a new task definition based on the current one, ensuring to filter out unwanted parameters
           NEW_TASK_DEF=$(jq --arg IMAGE_URI "${{ env.LATEST_IMAGE_URI }}" \
+            --arg SG_ID "${{ env.SG_ID }}" \
+            --arg SUBNET_ID "${{ env.SUBNET_ID }}" \
             '.taskDefinition | 
             .containerDefinitions[0].image=$IMAGE_URI |
+            .networkMode="awsvpc" | 
+            .requiresCompatibilities=["FARGATE"] |
+            .networkConfiguration={ "awsvpcConfiguration": { "subnets": [$SUBNET_ID], "securityGroups": [$SG_ID], "assignPublicIp": "ENABLED" }} |
             del(.revision, .taskDefinitionArn, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' \
             current_task_definition.json)
           echo "$NEW_TASK_DEF" > new_task_definition.json
@@ -87,8 +96,7 @@ jobs:
             --cluster example-ecs-cluster \
             --service example-ecs-service \
             --force-new-deployment \
-            --task-definition ${{ env.TASK_DEFINITION_ARN }} \
-            --network-configuration "awsvpcConfiguration={subnets=[${{ env.SUBNET_ID }}],securityGroups=[${{ env.SG_ID }}],assignPublicIp=ENABLED}"
+            --task-definition ${{ env.TASK_DEFINITION_ARN }}
           if [ $? -ne 0 ]; then
             echo "Error: Failed to update ECS service."
             exit 1
