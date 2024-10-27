@@ -67,6 +67,13 @@ jobs:
       - name: Register New ECS Task Definition
         id: register_task_def
         run: |
+          # Check if containerDefinitions is null or empty
+          CONTAINER_DEFINITIONS=$(jq '.taskDefinition.containerDefinitions' current_task_definition.json)
+          if [ "$CONTAINER_DEFINITIONS" == "null" ]; then
+            echo "Error: containerDefinitions is null or missing."
+            exit 1
+          fi
+
           # Update the Task Definition JSON to include the new Image URI
           jq --arg IMAGE_URI "${{ env.LATEST_IMAGE_URI }}" \
             --arg FAMILY "demo-app-task" \
@@ -74,7 +81,7 @@ jobs:
               family: $FAMILY,
               networkMode: "awsvpc",
               requiresCompatibilities: ["FARGATE"],
-              containerDefinitions: [.containerDefinitions[] | .image = $IMAGE_URI]
+              containerDefinitions: [.taskDefinition.containerDefinitions[] | .image = $IMAGE_URI]
             }' \
             current_task_definition.json > new_task_definition.json
 
