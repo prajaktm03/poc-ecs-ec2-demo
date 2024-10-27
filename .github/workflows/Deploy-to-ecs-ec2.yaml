@@ -61,7 +61,7 @@ jobs:
           echo "TASK_DEFINITION_ARN=$TASK_DEFINITION_ARN" >> $GITHUB_ENV
 
       - name: Debug Print TASK_DEFINITION_ARN
-        run: echo "TASK_DEFINITION_ARN is: ${{ env.TASK_DEFINITION_ARN }}"
+        run: echo "TASK_DEFINITION_ARN is:${{ env.TASK_DEFINITION_ARN }}"
 
       - name: Deploy New Task Definition to ECS Service
         run: |
