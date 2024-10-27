@@ -27,13 +27,10 @@ jobs:
           IMAGE_URI="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/demo-app-repo:$IMAGE_TAG"
           echo "LATEST_IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
 
-      - name: Debug Print fetched IMAGE_TAG
-        run: echo "Fetched IMAGE_TAG is:${{ env.LATEST_IMAGE_URI }}"
-
-      - name: Get First VPC ID
+      - name: Get VPC ID
         id: get_vpc_id
         run: |
-          VPC_ID=$(aws ec2 describe-vpcs --query "Vpcs[0].VpcId" --output text)
+          VPC_ID=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=your-vpc-name" --query "Vpcs[0].VpcId" --output text)
           echo "VPC_ID fetched: $VPC_ID"
           if [ "$VPC_ID" == "None" ]; then
             echo "Error: Unable to fetch VPC ID."
@@ -41,25 +38,10 @@ jobs:
           fi
           echo "VPC_ID=$VPC_ID" >> $GITHUB_ENV
 
-      - name: Get Subnet ID
-        id: get_subnet_id
-        run: |
-          SUBNET_ID=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=${{ env.VPC_ID }}" --query "Subnets[0].SubnetId" --output text)
-          echo "SUBNET_ID fetched: $SUBNET_ID"
-          if [ "$SUBNET_ID" == "None" ]; then
-            echo "Error: Unable to fetch Subnet ID."
-            exit 1
-          fi
-          echo "SUBNET_ID=$SUBNET_ID" >> $GITHUB_ENV
-
-      - name: List Security Groups
-        run: |
-          aws ec2 describe-security-groups --filters "Name=vpc-id,Values=${{ env.VPC_ID }}" --query "SecurityGroups[*].[GroupId, GroupName]" --output table
-
       - name: Get Security Group ID
         id: get_sg_id
         run: |
-          SG_ID=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=${{ env.VPC_ID }}" "Name=group-name,Values=your-sg-name" --query "SecurityGroups[0].GroupId" --output text)
+          SG_ID=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=${{ env.VPC_ID }}" "Name=tag:Name,Values=your-security-group-tag" --query "SecurityGroups[0].GroupId" --output text)
           echo "SG_ID fetched: $SG_ID"
           if [ "$SG_ID" == "None" ]; then
             echo "Error: Unable to fetch Security Group ID."
@@ -67,4 +49,41 @@ jobs:
           fi
           echo "SG_ID=$SG_ID" >> $GITHUB_ENV
 
-      # Continue with the other deployment steps...
+      - name: Describe Current ECS Task Definition
+        id: describe_task
+        run: |
+          TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition demo-app-task)
+          echo "$TASK_DEFINITION" > current_task_definition.json
+
+      - name: Register New ECS Task Definition
+        id: register_task_def
+        run: |
+          # Update the Task Definition JSON to include the new Image URI and Security Group ID
+          # Assuming you're using jq to modify the JSON file
+          jq --arg IMAGE_URI "${{ env.LATEST_IMAGE_URI }}" --arg SG_ID "${{ env.SG_ID }}" \
+            '.containerDefinitions[0].image = $IMAGE_URI | .networkMode = "awsvpc" | .requiresCompatibilities = ["FARGATE"] | .networkConfiguration.awsvpcConfiguration.subnets = [ "${{ env.SUBNET_ID }}" ] | .networkConfiguration.awsvpcConfiguration.securityGroups = [ $SG_ID ]' \
+            current_task_definition.json > new_task_definition.json
+
+          TASK_DEFINITION_ARN=$(aws ecs register-task-definition --cli-input-json file://new_task_definition.json \
+                                --query "taskDefinition.taskDefinitionArn" --output text)
+          if [ $? -ne 0 ]; then
+            echo "Error: Failed to register new task definition."
+            exit 1
+          fi
+          echo "TASK_DEFINITION_ARN=$TASK_DEFINITION_ARN" >> $GITHUB_ENV
+
+      - name: Deploy New Task Definition to ECS Service
+        run: |
+          aws ecs update-service \
+            --cluster example-ecs-cluster \
+            --service example-ecs-service \
+            --force-new-deployment \
+            --task-definition ${{ env.TASK_DEFINITION_ARN }}
+          if [ $? -ne 0 ]; then
+            echo "Error: Failed to update ECS service."
+            exit 1
+          fi
+
+      - name: Cleanup Temporary Files
+        run: |
+          rm -f current_task_definition.json new_task_definition.json
