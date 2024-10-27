@@ -18,13 +18,13 @@ jobs:
       - name: Get Latest Image URI
         id: get_image_uri
         run: |
-          IMAGE_TAG=$(aws ecr describe-images --repository-name demo-app-ecr-repo \
+          IMAGE_TAG=$(aws ecr describe-images --repository-name demo-app-repo \
                     --query 'sort_by(imageDetails, &imagePushedAt)[-1].imageTags[0]' --output text)
           if [ -z "$IMAGE_TAG" ]; then
             echo "Error: Unable to fetch the latest image tag."
             exit 1
           fi
-          IMAGE_URI="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/demo-app-ecr-repo:$IMAGE_TAG"
+          IMAGE_URI="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/demo-app-repo:$IMAGE_TAG"
           echo "LATEST_IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
 
       - name: Debug Print fetched IMAGE_TAG
@@ -64,8 +64,8 @@ jobs:
       - name: Deploy New Task Definition to ECS Service
         run: |
           aws ecs update-service \
-            --cluster demo-app-cluster \
-            --service cc-demo-app-service \
+            --cluster example-ecs-cluster \
+            --service example-ecs-service \
             --force-new-deployment \
             --task-definition ${{ env.TASK_DEFINITION_ARN }}
           if [ $? -ne 0 ]; then
