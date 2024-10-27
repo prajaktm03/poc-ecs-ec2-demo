@@ -69,7 +69,7 @@ jobs:
         run: |
           # Check if containerDefinitions is null or empty
           CONTAINER_DEFINITIONS=$(jq '.taskDefinition.containerDefinitions' current_task_definition.json)
-          if [ "$CONTAINER_DEFINITIONS" == "null" ]; then
+          if [ "$CONTAINER_DEFINITIONS" == "null" ] || [ -z "$CONTAINER_DEFINITIONS" ]; then
             echo "Error: containerDefinitions is null or missing."
             exit 1
           fi
