@@ -1,0 +1,57 @@
+name: New Build and Push Docker Image to ECR
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: List files in the app directory
+        run: ls -la ./App  # Adjust this path if needed
+
+      - name: Install Node.js dependencies
+        run: npm install
+        working-directory: ./App  # Adjust this if package.json is in a different directory
+
+      - name: Log in to Amazon ECR
+        id: ecr-login
+        run: |
+          aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+          echo "Login successful"
+
+      - name: Build, Tag, and Push Docker Image
+        env:
+          ECR_REPOSITORY: demo-app-repo  # Replace with your ECR repo name
+          IMAGE_TAG: ${{ github.sha }}
+          ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+
+        run: |
+          # Build the Docker image
+          docker build -t $ECR_REPOSITORY:$IMAGE_TAG ./App
+          # Tag the image for ECR with the 'latest' tag
+          docker tag $ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          # Tag the image for ECR with the SHA tag
+          docker tag $ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          # Push the images to ECR
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+      - name: Debug List pushed images
+        run: |
+          aws ecr describe-images --repository-name demo-app-repo --output json
+
+      - name: Verify Image Exists in ECR
+        run: |
+          aws ecr describe-images --repository-name demo-app-repo --output json
