@@ -1,0 +1,50 @@
+name: Parameters check
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up AWS CLI
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Fetch VPC ID
+        id: vpc
+        run: |
+          VPC_ID=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=your-vpc-name" --query "Vpcs[0].VpcId" --output text)
+          echo "VPC_ID fetched: $VPC_ID"
+          echo "VPC_ID=$VPC_ID" >> $GITHUB_ENV
+
+      - name: List Security Groups
+        run: |
+          aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$VPC_ID" --query "SecurityGroups[*].[GroupId, Tags]" --output table
+
+      - name: Fetch Security Group ID
+        run: |
+          SG_ID=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$VPC_ID" "Name=tag:Name,Values=ecs-service-sg" --query "SecurityGroups[0].GroupId" --output text)
+          echo "SG_ID fetched: $SG_ID"
+          if [ "$SG_ID" == "None" ]; then
+            echo "Error: Unable to fetch Security Group ID."
+            exit 1
+          fi
+          echo "SG_ID=$SG_ID" >> $GITHUB_ENV
+
+      - name: Fetch latest Docker image
+        id: docker-image
+        run: |
+          LATEST_IMAGE_URI=$(aws ecr describe-repositories --repository-names demo-app-repo --query "repositories[0].repositoryUri" --output text)
+          echo "LATEST_IMAGE_URI fetched: $LATEST_IMAGE_URI"
+          echo "LATEST_IMAGE_URI=$LATEST_IMAGE_URI" >> $GITHUB_ENV
+
+      # Add other steps for building and deploying your application
