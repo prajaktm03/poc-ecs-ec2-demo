@@ -65,15 +65,18 @@ jobs:
         run: |
           # Update the Task Definition JSON to include the new Image URI and Security Group ID
           jq --arg IMAGE_URI "${{ env.LATEST_IMAGE_URI }}" --arg SG_ID "${{ env.SG_ID }}" \
-            '.containerDefinitions[0].image = $IMAGE_URI | 
-            del(.taskDefinitionArn, .revision, .status, .requiresAttributes) | 
-            .networkMode = "awsvpc" | 
-            .requiresCompatibilities = ["FARGATE"] |
-            .networkConfiguration = {
-              "awsvpcConfiguration": {
-                "subnets": ["${{ secrets.SUBNET_ID }}"],
-                "securityGroups": [$SG_ID],
-                "assignPublicIp": "ENABLED"
+            --arg FAMILY "demo-app-task" \  # Add the family parameter here
+            '{
+              family: $FAMILY,
+              networkMode: "awsvpc",
+              requiresCompatibilities: ["FARGATE"],
+              containerDefinitions: [.containerDefinitions[] | .image = $IMAGE_URI],
+              networkConfiguration: {
+                awsvpcConfiguration: {
+                  subnets: ["${{ secrets.SUBNET_ID }}"],
+                  securityGroups: [$SG_ID],
+                  assignPublicIp: "ENABLED"
+                }
               }
             }' \
             current_task_definition.json > new_task_definition.json
@@ -92,4 +95,12 @@ jobs:
             --cluster example-ecs-cluster \
             --service example-ecs-service \
             --force-new-deployment \
-            --task-def
+            --task-definition ${{ env.TASK_DEFINITION_ARN }}
+          if [ $? -ne 0 ]; then
+            echo "Error: Failed to update ECS service."
+            exit 1
+          fi
+
+      - name: Cleanup Temporary Files
+        run: |
+          rm -f current_task_definition.json new_task_definition.json
