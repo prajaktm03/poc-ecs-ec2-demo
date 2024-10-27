@@ -28,7 +28,7 @@ jobs:
           echo "LATEST_IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
 
       - name: Debug Print fetched IMAGE_TAG
-        run: echo "Fetched IMAGE_TAG is:${{ env.LATEST_IMAGE_URI }}"
+        run: echo "Fetched IMAGE_TAG is: ${{ env.LATEST_IMAGE_URI }}"
 
       - name: Get First VPC ID
         id: get_vpc_id
@@ -51,6 +51,10 @@ jobs:
             exit 1
           fi
           echo "SUBNET_ID=$SUBNET_ID" >> $GITHUB_ENV
+
+      - name: List Security Groups
+        run: |
+          aws ec2 describe-security-groups --filters "Name=vpc-id,Values=${{ env.VPC_ID }}" --query "SecurityGroups[*].[GroupId, GroupName]" --output table
 
       - name: Get Security Group ID
         id: get_sg_id
