@@ -19,27 +19,21 @@ jobs:
         id: get_vpc_id
         run: |
           VPC_ID=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=your-vpc-name" --query "Vpcs[0].VpcId" --output text)
+          if [ "$VPC_ID" == "None" ]; then
+            echo "Error: Unable to fetch VPC ID."
+            exit 1
+          fi
           echo "VPC_ID=$VPC_ID" >> $GITHUB_ENV
 
       - name: Get Security Group ID
         id: get_sg_id
         run: |
-          SG_ID=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$VPC_ID" "Name=group-name,Values=your-sg-name" --query "SecurityGroups[0].GroupId" --output text)
+          SG_ID=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=${{ env.VPC_ID }}" "Name=group-name,Values=your-sg-name" --query "SecurityGroups[0].GroupId" --output text)
           if [ "$SG_ID" == "None" ]; then
             echo "Error: Unable to fetch Security Group ID."
             exit 1
           fi
           echo "SG_ID=$SG_ID" >> $GITHUB_ENV
-
-      - name: Get Subnet ID
-        id: get_subnet_id
-        run: |
-          SUBNET_ID=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$VPC_ID" "Name=tag:Name,Values=your-subnet-name" --query "Subnets[0].SubnetId" --output text)
-          if [ "$SUBNET_ID" == "None" ]; then
-            echo "Error: Unable to fetch Subnet ID."
-            exit 1
-          fi
-          echo "SUBNET_ID=$SUBNET_ID" >> $GITHUB_ENV
 
       - name: Get Latest Image URI
         id: get_image_uri
