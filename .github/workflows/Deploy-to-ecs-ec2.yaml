@@ -74,13 +74,17 @@ jobs:
             exit 1
           fi
 
-          # Update the Task Definition JSON to include the new Image URI
+          # Update the Task Definition JSON to include the new Image URI, cpu, and memory
           jq --arg IMAGE_URI "${{ env.LATEST_IMAGE_URI }}" \
             --arg FAMILY "demo-app-task" \
+            --arg CPU "256" \  # Specify CPU value
+            --arg MEMORY "512" \  # Specify Memory value
             '{
               family: $FAMILY,
               networkMode: "awsvpc",
               requiresCompatibilities: ["FARGATE"],
+              cpu: $CPU,  # Add cpu parameter
+              memory: $MEMORY,  # Add memory parameter
               containerDefinitions: [.taskDefinition.containerDefinitions[] | .image = $IMAGE_URI]
             }' \
             current_task_definition.json > new_task_definition.json
