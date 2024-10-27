@@ -28,8 +28,12 @@ jobs:
 
       - name: List Security Groups
         run: |
-          aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$VPC_ID" --query "SecurityGroups[*].[GroupId, Tags]" --output table
-
+          SG_OUTPUT=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$VPC_ID" --output json)
+          echo "Security Group Output: $SG_OUTPUT"
+          echo "$SG_OUTPUT" | jq -r '.SecurityGroups[] | "\(.GroupId) \(.Tags // [])"'
+      
+      
+      
       - name: Fetch Security Group ID
         run: |
           SG_ID=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$VPC_ID" "Name=tag:Name,Values=ecs-service-sg" --query "SecurityGroups[0].GroupId" --output text)
