@@ -1,12 +1,12 @@
 name: Terraform Create
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+  #push:
+    #branches:
+      #- main
+  #pull_request:
+    #branches:
+      #- main
   workflow_dispatch:  # For manual triggers
 
 jobs:
