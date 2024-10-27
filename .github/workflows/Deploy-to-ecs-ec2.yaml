@@ -44,8 +44,6 @@ jobs:
           echo "Security Group Output: $SG_OUTPUT"
           echo "$SG_OUTPUT" | jq -r '.SecurityGroups[] | "\(.GroupId) \(.Tags // [])"'
       
-      
-      
       - name: Fetch Security Group ID
         run: |
           SG_ID=$(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$VPC_ID" "Name=tag:Name,Values=ecs-service-sg" --query "SecurityGroups[0].GroupId" --output text)
@@ -55,12 +53,6 @@ jobs:
             exit 1
           fi
           echo "SG_ID=$SG_ID" >> $GITHUB_ENV
-
-
-
-
-
-      
 
       - name: Describe Current ECS Task Definition
         id: describe_task
@@ -72,9 +64,18 @@ jobs:
         id: register_task_def
         run: |
           # Update the Task Definition JSON to include the new Image URI and Security Group ID
-          # Assuming you're using jq to modify the JSON file
           jq --arg IMAGE_URI "${{ env.LATEST_IMAGE_URI }}" --arg SG_ID "${{ env.SG_ID }}" \
-            '.containerDefinitions[0].image = $IMAGE_URI | .networkMode = "awsvpc" | .requiresCompatibilities = ["FARGATE"] | .networkConfiguration.awsvpcConfiguration.subnets = [ "${{ env.SUBNET_ID }}" ] | .networkConfiguration.awsvpcConfiguration.securityGroups = [ $SG_ID ]' \
+            '.containerDefinitions[0].image = $IMAGE_URI | 
+            del(.taskDefinitionArn, .revision, .status, .requiresAttributes) | 
+            .networkMode = "awsvpc" | 
+            .requiresCompatibilities = ["FARGATE"] |
+            .networkConfiguration = {
+              "awsvpcConfiguration": {
+                "subnets": ["${{ secrets.SUBNET_ID }}"],
+                "securityGroups": [$SG_ID],
+                "assignPublicIp": "ENABLED"
+              }
+            }' \
             current_task_definition.json > new_task_definition.json
 
           TASK_DEFINITION_ARN=$(aws ecs register-task-definition --cli-input-json file://new_task_definition.json \
@@ -91,12 +92,4 @@ jobs:
             --cluster example-ecs-cluster \
             --service example-ecs-service \
             --force-new-deployment \
-            --task-definition ${{ env.TASK_DEFINITION_ARN }}
-          if [ $? -ne 0 ]; then
-            echo "Error: Failed to update ECS service."
-            exit 1
-          fi
-
-      - name: Cleanup Temporary Files
-        run: |
-          rm -f current_task_definition.json new_task_definition.json
+            --task-def
