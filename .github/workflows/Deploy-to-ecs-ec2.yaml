@@ -67,21 +67,14 @@ jobs:
       - name: Register New ECS Task Definition
         id: register_task_def
         run: |
-          # Update the Task Definition JSON to include the new Image URI and Security Group ID
-          jq --arg IMAGE_URI "${{ env.LATEST_IMAGE_URI }}" --arg SG_ID "${{ env.SG_ID }}" \
-            --arg SUBNET_ID "${{ secrets.SUBNET_ID }}" \
+          # Update the Task Definition JSON to include the new Image URI
+          jq --arg IMAGE_URI "${{ env.LATEST_IMAGE_URI }}" \
+            --arg FAMILY "demo-app-task" \
             '{
-              family: "demo-app-task",
+              family: $FAMILY,
               networkMode: "awsvpc",
               requiresCompatibilities: ["FARGATE"],
-              containerDefinitions: (if .containerDefinitions then [.containerDefinitions[] | .image = $IMAGE_URI] else [] end),
-              networkConfiguration: {
-                awsvpcConfiguration: {
-                  subnets: [$SUBNET_ID],
-                  securityGroups: [$SG_ID],
-                  assignPublicIp: "ENABLED"
-                }
-              }
+              containerDefinitions: [.containerDefinitions[] | .image = $IMAGE_URI]
             }' \
             current_task_definition.json > new_task_definition.json
 
@@ -99,7 +92,8 @@ jobs:
             --cluster example-ecs-cluster \
             --service example-ecs-service \
             --force-new-deployment \
-            --task-definition ${{ env.TASK_DEFINITION_ARN }}
+            --task-definition ${{ env.TASK_DEFINITION_ARN }} \
+            --network-configuration "awsvpcConfiguration={subnets=[\"${{ secrets.SUBNET_ID }}\"],securityGroups=[\"${{ env.SG_ID }}\"],assignPublicIp=\"ENABLED\"}"
           if [ $? -ne 0 ]; then
             echo "Error: Failed to update ECS service."
             exit 1
