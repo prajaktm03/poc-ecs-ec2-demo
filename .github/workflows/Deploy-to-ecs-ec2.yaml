@@ -60,6 +60,10 @@ jobs:
           TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition demo-app-task)
           echo "$TASK_DEFINITION" > current_task_definition.json
 
+      - name: Output Current Task Definition
+        run: |
+          cat current_task_definition.json  # Output the current task definition for debugging
+
       - name: Register New ECS Task Definition
         id: register_task_def
         run: |
@@ -70,7 +74,7 @@ jobs:
               family: "demo-app-task",
               networkMode: "awsvpc",
               requiresCompatibilities: ["FARGATE"],
-              containerDefinitions: [.containerDefinitions[] | .image = $IMAGE_URI],
+              containerDefinitions: (if .containerDefinitions then [.containerDefinitions[] | .image = $IMAGE_URI] else [] end),
               networkConfiguration: {
                 awsvpcConfiguration: {
                   subnets: [$SUBNET_ID],
