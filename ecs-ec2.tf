@@ -183,15 +183,15 @@ resource "aws_ecs_task_definition" "example" {
   cpu                      = "256"
   memory                   = "512"
 
-  container_definitions = jsonencode([{
-    name      = "nginx"
-    image     = "${aws_ecr_repository.demo_app_repo.repository_url}:latest"
-    essential = true
-    portMappings = [{
-      containerPort = 80
-      hostPort      = 80
-    }]
-  }])
+  #container_definitions = jsonencode([{
+   # name      = "nginx"
+    #image     = "${aws_ecr_repository.demo_app_repo.repository_url}:latest"
+   # essential = true
+    #portMappings = [{
+     # containerPort = 80
+     # hostPort      = 80
+    #}]
+  #}])
 }
 
 # Attach the ECR read-only policy to the ECS instance role
